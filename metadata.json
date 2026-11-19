@@ -1,0 +1,6 @@
+{
+  "name": "Folio — Smart PDF to Image",
+  "description": "Convert PDF pages into crisp PNG, JPG, or WebP images locally with a native iOS-inspired interface, gesture controls, and batch ZIP export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

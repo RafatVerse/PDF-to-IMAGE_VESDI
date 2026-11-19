@@ -1,0 +1,92 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: #F4F5F8;
+    color: #000000;
+    overscroll-behavior-y: none;
+  }
+
+  .dark body {
+    background-color: #09090B;
+    color: #FFFFFF;
+  }
+}
+
+/* Refined iOS Dot-Grid Canvas */
+.ios-dot-canvas {
+  background-color: #F4F5F8;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(0, 122, 255, 0.06), transparent 55%),
+    radial-gradient(rgba(15, 23, 42, 0.11) 1px, transparent 1px);
+  background-size: 100% 100%, 22px 22px;
+  background-position: 0 0, 0 0;
+}
+
+.dark .ios-dot-canvas {
+  background-color: #09090B;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(10, 132, 255, 0.10), transparent 55%),
+    radial-gradient(rgba(255, 255, 255, 0.11) 1px, transparent 1px);
+  background-size: 100% 100%, 22px 22px;
+  background-position: 0 0, 0 0;
+}
+
+.lightbox-dot-canvas {
+  background-color: #0A0A0C;
+  background-image:
+    radial-gradient(circle at 50% 45%, rgba(10, 132, 255, 0.08), transparent 60%),
+    radial-gradient(rgba(255, 255, 255, 0.10) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px;
+}
+
+/* Native iOS Range Slider */
+input[type="range"].ios-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  outline: none;
+}
+
+input[type="range"].ios-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+input[type="range"].ios-slider::-webkit-slider-thumb:active {
+  transform: scale(1.12);
+}
+
+input[type="range"].ios-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
