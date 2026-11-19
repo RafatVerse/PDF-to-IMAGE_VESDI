@@ -77,12 +77,25 @@ export function PageLightbox({
     if (!isOpen || activeIndex === null || !currentPage) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in an input
-      if (e.target instanceof HTMLInputElement && e.target.type !== 'range') return;
+      // Ignore if typing in a text input, textarea, select, or contentEditable
+      if (
+        (e.target instanceof HTMLInputElement && e.target.type !== 'range') ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
+        return;
+      }
 
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onDownloadSingle(currentPage);
         return;
       }
 
@@ -104,23 +117,29 @@ export function PageLightbox({
         return;
       }
 
-      if (e.key === 'r' || e.key === 'R') {
+      if (!e.metaKey && !e.ctrlKey && e.key.toLowerCase() === 'r') {
         e.preventDefault();
         onRotatePage(currentPage.pageNumber);
         return;
       }
 
-      // Page navigation shortcuts that always work
+      if (!e.metaKey && !e.ctrlKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onToggleSelect(currentPage.pageNumber);
+        return;
+      }
+
+      // Page navigation shortcuts that always work at any zoom level
       if (e.key === '[' || e.key === 'PageUp') {
+        e.preventDefault();
         if (activeIndex > 0) {
-          e.preventDefault();
           onNavigate(activeIndex - 1);
         }
         return;
       }
       if (e.key === ']' || e.key === 'PageDown') {
+        e.preventDefault();
         if (activeIndex < pages.length - 1) {
-          e.preventDefault();
           onNavigate(activeIndex + 1);
         }
         return;
@@ -155,7 +174,20 @@ export function PageLightbox({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, activeIndex, currentPage, pages.length, zoom, onClose, onNavigate, onRotatePage, updateZoom, resetView]);
+  }, [
+    isOpen,
+    activeIndex,
+    currentPage,
+    pages.length,
+    zoom,
+    onClose,
+    onNavigate,
+    onRotatePage,
+    onToggleSelect,
+    onDownloadSingle,
+    updateZoom,
+    resetView,
+  ]);
 
   // Wheel / Trackpad pinch-to-zoom handler
   const handleWheel = (e: React.WheelEvent) => {
@@ -239,15 +271,15 @@ export function PageLightbox({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-50 flex flex-col bg-black/92 backdrop-blur-2xl text-white select-none"
+          className="fixed inset-0 z-50 flex flex-col bg-[#F4F5F8]/95 dark:bg-[#0A0A0C]/95 backdrop-blur-2xl text-black dark:text-white select-none"
         >
           {/* Top Bar */}
-          <div className="flex items-center justify-between px-4 sm:px-6 h-16 border-b border-white/10 shrink-0">
+          <div className="flex items-center justify-between px-4 sm:px-6 h-16 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl border-b border-black/[0.06] dark:border-white/[0.08] shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-[15px] font-semibold truncate">
                 Page {currentPage.pageNumber} of {pages.length}
               </span>
-              <span className="text-xs text-white/55 tabular-nums hidden sm:inline">
+              <span className="text-xs text-[#6C6C70] dark:text-[#98989F] tabular-nums hidden sm:inline">
                 {currentPage.width} × {currentPage.height} pt
               </span>
             </div>
@@ -258,8 +290,8 @@ export function PageLightbox({
                 onClick={() => onToggleSelect(currentPage.pageNumber)}
                 className={`min-h-[40px] px-3.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                   currentPage.selected
-                    ? 'bg-[#0A84FF] text-white'
-                    : 'bg-white/12 text-white/90 hover:bg-white/20'
+                    ? 'bg-[#007AFF] dark:bg-[#0A84FF] text-white'
+                    : 'bg-black/[0.06] dark:bg-white/12 text-black dark:text-white/90 hover:bg-black/[0.10] dark:hover:bg-white/20'
                 }`}
               >
                 <Check className="w-3.5 h-3.5" />
@@ -270,7 +302,7 @@ export function PageLightbox({
                 type="button"
                 onClick={onClose}
                 aria-label="Close preview"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-white/12 hover:bg-white/20 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-black/[0.06] dark:bg-white/12 hover:bg-black/[0.10] dark:hover:bg-white/20 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -300,7 +332,7 @@ export function PageLightbox({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => onNavigate(activeIndex - 1)}
                 aria-label="Previous page"
-                className="hidden sm:flex absolute left-5 z-20 min-h-[48px] min-w-[48px] items-center justify-center rounded-full bg-white/12 hover:bg-white/22 backdrop-blur-md transition-colors"
+                className="hidden sm:flex absolute left-5 z-20 min-h-[48px] min-w-[48px] items-center justify-center rounded-full bg-white/85 dark:bg-white/12 hover:bg-white dark:hover:bg-white/22 text-black dark:text-white shadow-md dark:shadow-none border border-black/[0.06] dark:border-transparent backdrop-blur-md transition-colors"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
@@ -320,7 +352,7 @@ export function PageLightbox({
                 alt={`Page ${currentPage.pageNumber} preview`}
                 draggable={false}
                 style={{ transform: `rotate(${currentPage.rotation}deg)` }}
-                className="max-h-[68vh] max-w-[88vw] sm:max-w-[75vw] object-contain rounded-[14px] shadow-2xl transition-transform duration-300 pointer-events-none"
+                className="max-h-[68vh] max-w-[88vw] sm:max-w-[75vw] object-contain rounded-[14px] shadow-[0_12px_40px_rgba(0,0,0,0.14)] dark:shadow-2xl ring-1 ring-black/[0.06] dark:ring-white/[0.08] transition-transform duration-300 pointer-events-none"
               />
             </div>
 
@@ -330,7 +362,7 @@ export function PageLightbox({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => onNavigate(activeIndex + 1)}
                 aria-label="Next page"
-                className="hidden sm:flex absolute right-5 z-20 min-h-[48px] min-w-[48px] items-center justify-center rounded-full bg-white/12 hover:bg-white/22 backdrop-blur-md transition-colors"
+                className="hidden sm:flex absolute right-5 z-20 min-h-[48px] min-w-[48px] items-center justify-center rounded-full bg-white/85 dark:bg-white/12 hover:bg-white dark:hover:bg-white/22 text-black dark:text-white shadow-md dark:shadow-none border border-black/[0.06] dark:border-transparent backdrop-blur-md transition-colors"
               >
                 <ChevronRight className="w-6 h-6" />
               </button>
@@ -338,7 +370,7 @@ export function PageLightbox({
           </div>
 
           {/* Bottom Zoom Slider & Action Toolbar */}
-          <div className="px-4 py-3.5 pb-safe border-t border-white/10 bg-black/60 backdrop-blur-xl shrink-0">
+          <div className="px-4 py-3.5 pb-safe border-t border-black/[0.06] dark:border-white/[0.08] bg-white/85 dark:bg-[#1C1C1E]/85 backdrop-blur-xl shrink-0">
             <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
               {/* Zoom Slider Controls */}
               <div className="flex items-center gap-2.5 w-full sm:w-auto justify-center">
@@ -347,7 +379,7 @@ export function PageLightbox({
                   onClick={() => updateZoom(zoom - ZOOM_STEP)}
                   disabled={zoom <= MIN_ZOOM}
                   aria-label="Zoom out"
-                  className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full bg-white/12 hover:bg-white/20 disabled:opacity-35 transition-colors shrink-0"
+                  className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full bg-black/[0.06] dark:bg-white/12 hover:bg-black/[0.10] dark:hover:bg-white/20 disabled:opacity-35 transition-colors shrink-0"
                 >
                   <ZoomOut className="w-4 h-4" />
                 </button>
@@ -363,7 +395,7 @@ export function PageLightbox({
                     aria-label="Zoom level"
                     className="ios-slider w-full cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #0A84FF 0%, #0A84FF ${sliderFill}%, rgba(255,255,255,0.22) ${sliderFill}%, rgba(255,255,255,0.22) 100%)`,
+                      background: `linear-gradient(to right, #007AFF 0%, #007AFF ${sliderFill}%, rgba(120,120,128,0.28) ${sliderFill}%, rgba(120,120,128,0.28) 100%)`,
                     }}
                   />
                 </div>
@@ -373,7 +405,7 @@ export function PageLightbox({
                   onClick={() => updateZoom(zoom + ZOOM_STEP)}
                   disabled={zoom >= MAX_ZOOM}
                   aria-label="Zoom in"
-                  className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full bg-white/12 hover:bg-white/20 disabled:opacity-35 transition-colors shrink-0"
+                  className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full bg-black/[0.06] dark:bg-white/12 hover:bg-black/[0.10] dark:hover:bg-white/20 disabled:opacity-35 transition-colors shrink-0"
                 >
                   <ZoomIn className="w-4 h-4" />
                 </button>
@@ -382,7 +414,7 @@ export function PageLightbox({
                   type="button"
                   onClick={resetView}
                   title="Reset zoom and pan (Shortcut: 0)"
-                  className="min-h-[36px] min-w-[54px] px-2.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold tabular-nums flex items-center justify-center gap-1 transition-colors shrink-0"
+                  className="min-h-[36px] min-w-[54px] px-2.5 rounded-full bg-black/[0.06] dark:bg-white/10 hover:bg-black/[0.10] dark:hover:bg-white/20 text-xs font-semibold tabular-nums flex items-center justify-center gap-1 transition-colors shrink-0"
                 >
                   <span>{zoomPercent}%</span>
                   {(zoom !== 1 || pan.x !== 0 || pan.y !== 0) && (
@@ -397,7 +429,7 @@ export function PageLightbox({
                   type="button"
                   onClick={() => onRotatePage(currentPage.pageNumber)}
                   title="Rotate 90° (Shortcut: R)"
-                  className="min-h-[40px] px-4 rounded-full bg-white/12 hover:bg-white/20 text-xs font-medium flex items-center gap-2 transition-colors whitespace-nowrap"
+                  className="min-h-[40px] px-4 rounded-full bg-black/[0.06] dark:bg-white/12 hover:bg-black/[0.10] dark:hover:bg-white/20 text-xs font-medium flex items-center gap-2 transition-colors whitespace-nowrap"
                 >
                   <RotateCw className="w-4 h-4" />
                   <span>Rotate</span>
@@ -406,7 +438,7 @@ export function PageLightbox({
                 <button
                   type="button"
                   onClick={() => onDownloadSingle(currentPage)}
-                  className="min-h-[40px] px-5 rounded-full bg-[#0A84FF] hover:bg-[#1E8FFF] text-xs font-semibold flex items-center gap-2 transition-colors whitespace-nowrap"
+                  className="min-h-[40px] px-5 rounded-full bg-[#007AFF] dark:bg-[#0A84FF] hover:bg-[#0071EB] dark:hover:bg-[#1E8FFF] text-white text-xs font-semibold flex items-center gap-2 transition-colors whitespace-nowrap"
                 >
                   <Download className="w-4 h-4" />
                   <span>Save Image</span>

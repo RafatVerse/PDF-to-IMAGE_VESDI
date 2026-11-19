@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import {
@@ -21,6 +22,7 @@ import {
   ShieldCheck,
   Layers,
   Loader2,
+  Keyboard,
 } from 'lucide-react';
 import {
   loadPdfDocument,
@@ -36,6 +38,7 @@ import {
 } from './utils/pdfEngine';
 import { SettingsPanel } from './components/SettingsPanel';
 import { PageLightbox } from './components/PageLightbox';
+import { ShortcutsModal } from './components/ShortcutsModal';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -62,9 +65,10 @@ export default function App() {
     null
   );
 
-  // Mobile sheet & lightbox states
+  // Mobile sheet, lightbox, and shortcuts modal states
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
   // Toast feedback
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -74,6 +78,70 @@ export default function App() {
   // Sync dark mode class on <html>
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
+
+  // Native iOS / macOS Optical Cross-Dissolve Theme Transition
+  const toggleTheme = useCallback(() => {
+    const nextDark = !darkMode;
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const docWithTransition = document as Document & {
+      startViewTransition?: (cb: () => void) => {
+        ready: Promise<void>;
+        finished: Promise<void>;
+      };
+    };
+
+    if (!docWithTransition.startViewTransition || prefersReducedMotion) {
+      document.documentElement.classList.add('theme-transitioning');
+      document.documentElement.classList.toggle('dark', nextDark);
+      setDarkMode(nextDark);
+      requestAnimationFrame(() => {
+        document.documentElement.classList.remove('theme-transitioning');
+      });
+      return;
+    }
+
+    document.documentElement.classList.add('theme-transitioning');
+    const transition = docWithTransition.startViewTransition(() => {
+      flushSync(() => {
+        document.documentElement.classList.toggle('dark', nextDark);
+        setDarkMode(nextDark);
+      });
+    });
+
+    transition.ready.then(() => {
+      document.documentElement.animate(
+        {
+          opacity: [0, 1],
+          filter: ['blur(6px)', 'blur(0px)'],
+          transform: ['scale(1.008)', 'scale(1)'],
+        },
+        {
+          duration: 380,
+          easing: 'cubic-bezier(0.32, 0.72, 0, 1)',
+          pseudoElement: '::view-transition-new(root)',
+        }
+      );
+
+      document.documentElement.animate(
+        {
+          opacity: [1, 0.6],
+          filter: ['blur(0px)', 'blur(3px)'],
+        },
+        {
+          duration: 380,
+          easing: 'cubic-bezier(0.32, 0.72, 0, 1)',
+          pseudoElement: '::view-transition-old(root)',
+        }
+      );
+    });
+
+    transition.finished.finally(() => {
+      document.documentElement.classList.remove('theme-transitioning');
+    });
   }, [darkMode]);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
@@ -257,9 +325,106 @@ export default function App() {
 
   const selectedCount = pages.filter((p) => p.selected).length;
 
+  // Global Workspace Keyboard Shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Ignore when typing in form inputs or contentEditable
+      if (
+        (e.target instanceof HTMLInputElement && e.target.type !== 'range') ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
+        return;
+      }
+
+      // '?' toggles Shortcuts Help Modal from anywhere
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setIsShortcutsOpen((open) => !open);
+        return;
+      }
+
+      // When Shortcuts Modal or Lightbox is open, let them handle their own keys
+      if (isShortcutsOpen || lightboxIndex !== null) {
+        return;
+      }
+
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+
+      // Cmd/Ctrl + O: Open PDF file
+      if (mod && key === 'o') {
+        e.preventDefault();
+        fileInputRef.current?.click();
+        return;
+      }
+
+      // Cmd/Ctrl + S: Export selected pages
+      if (mod && key === 's') {
+        e.preventDefault();
+        if (fileMeta && selectedCount > 0 && !isExporting) {
+          handleExportSelected();
+        }
+        return;
+      }
+
+      // Cmd/Ctrl + A: Select all pages
+      if (mod && key === 'a' && pages.length > 0) {
+        e.preventDefault();
+        selectAllPages();
+        return;
+      }
+
+      // Esc: Close mobile sheet or deselect all pages
+      if (e.key === 'Escape') {
+        if (isSheetOpen) {
+          e.preventDefault();
+          setIsSheetOpen(false);
+        } else if (selectedCount > 0) {
+          e.preventDefault();
+          deselectAllPages();
+        }
+        return;
+      }
+
+      // Single-key shortcuts (no modifiers)
+      if (!mod && !e.altKey) {
+        if (key === 't') {
+          e.preventDefault();
+          toggleTheme();
+          return;
+        }
+        if (key === 'r' && pages.length > 0 && selectedCount > 0) {
+          e.preventDefault();
+          rotateSelectedPages();
+          return;
+        }
+        if (key === 'p' && pages.length > 0) {
+          e.preventDefault();
+          const firstSelectedIdx = pages.findIndex((p) => p.selected);
+          setLightboxIndex(firstSelectedIdx >= 0 ? firstSelectedIdx : 0);
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [
+    isShortcutsOpen,
+    lightboxIndex,
+    isSheetOpen,
+    fileMeta,
+    pages,
+    selectedCount,
+    isExporting,
+    toggleTheme,
+  ]);
+
   return (
     <div
-      className="min-h-screen flex flex-col ios-dot-canvas text-black dark:text-white transition-colors duration-200"
+      className="min-h-screen flex flex-col ios-dot-canvas text-black dark:text-white"
       onDragOver={(e) => {
         e.preventDefault();
         setIsDraggingFile(true);
@@ -333,14 +498,36 @@ export default function App() {
           )}
 
           {/* Right Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => setDarkMode((d) => !d)}
-              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-[#6C6C70] dark:text-[#98989F] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors"
+              onClick={() => setIsShortcutsOpen(true)}
+              aria-label="Keyboard shortcuts"
+              title="Keyboard shortcuts (?)"
+              className="hidden sm:flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-[#6C6C70] dark:text-[#98989F] hover:text-black dark:hover:text-white hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors"
             >
-              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              <Keyboard className="w-5 h-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              title="Toggle theme (T)"
+              className="relative min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-[#6C6C70] dark:text-[#98989F] hover:text-black dark:hover:text-white hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors overflow-hidden"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={darkMode ? 'sun' : 'moon'}
+                  initial={{ rotate: -90, scale: 0.6, opacity: 0 }}
+                  animate={{ rotate: 0, scale: 1, opacity: 1 }}
+                  exit={{ rotate: 90, scale: 0.6, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                  className="flex items-center justify-center"
+                >
+                  {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                </motion.span>
+              </AnimatePresence>
             </button>
 
             {fileMeta && (
@@ -757,6 +944,12 @@ export default function App() {
         onRotatePage={rotatePage}
         onToggleSelect={toggleSelectPage}
         onDownloadSingle={handleDownloadSingle}
+      />
+
+      {/* Keyboard Shortcuts Help Modal */}
+      <ShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
       />
     </div>
   );
